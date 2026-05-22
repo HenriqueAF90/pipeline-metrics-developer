@@ -1,92 +1,57 @@
-.PHONY: build test lint run stop seed clean logs
+.PHONY: up down build test lint seed logs clean help
 
-# Build all services
+## up: sobe todos os containers (LocalStack + Processor + Aggregator)
+up:
+	docker compose up --build -d
+	@echo "Aguardando serviços subirem..."
+	@sleep 5
+	@echo "Pronto! API disponível em http://localhost:8080"
+
+## down: derruba todos os containers
+down:
+	docker compose down
+
+## build: compila as imagens Docker sem subir
 build:
 	docker compose build
 
-# Run all services
-run:
-	docker compose up -d
-
-# Run with logs visible
-run-logs:
-	docker compose up
-
-# Stop all services
-stop:
-	docker compose down
-
-# Run seed script
-seed:
-	chmod +x scripts/seed.sh
-	@bash scripts/seed.sh
-
-# Run unit tests for processor
-test-processor:
+## test: executa todos os testes unitários
+test:
+	@echo "=== Processor tests ==="
 	cd services/processor && go test ./... -v -count=1
-
-# Run unit tests for aggregator
-test-aggregator:
+	@echo ""
+	@echo "=== Aggregator tests ==="
 	cd services/aggregator && go test ./... -v -count=1
 
-# Run all tests
-test:
-	$(MAKE) test-processor
-	$(MAKE) test-aggregator
-
-	# Run all tests
-test: test-processor test-aggregator
-
-# Lint (requires golangci-lint)
+## lint: executa o linter (requer golangci-lint instalado)
 lint:
 	cd services/processor && golangci-lint run ./...
 	cd services/aggregator && golangci-lint run ./...
 
-# View logs
+## seed: publica mensagens de teste na fila raw-events
+seed:
+	@bash scripts/seed.sh
+
+## logs: exibe logs de todos os serviços em tempo real
 logs:
 	docker compose logs -f
 
-# View processor logs
+## logs-processor: logs apenas do processor
 logs-processor:
 	docker compose logs -f processor
 
-# View aggregator logs
+## logs-aggregator: logs apenas do aggregator
 logs-aggregator:
 	docker compose logs -f aggregator
 
-# Clean up
+## clean: remove containers, volumes e imagens builadas
 clean:
-	docker compose down -v --remove-orphans
-	docker system prune -f
+	docker compose down -v --rmi local
 
-# Check API health
+## health: verifica o health check da API
 health:
-	@curl -s http://localhost:8080/health | python3 -m json.tool
+	@curl -s http://localhost:8080/health | jq .
 
-# Get developer summary
-summary:
-	@echo "Usage: make summary DEV=dev-123"
-	@curl -s http://localhost:8080/metrics/$(DEV)/summary | python3 -m json.tool
-
-# Get developer events
-events:
-	@echo "Usage: make events DEV=dev-123"
-
-	# Get developer events
-events:
-	@echo "Usage: make events DEV=dev-123"
-	@curl -s http://localhost:8080/metrics/$(DEV) | python3 -m json.tool
-
-# Full integration test: build, run, seed, check
-integration: build run
-	@echo "Waiting for services to start..."
-	@sleep 15
-	@make seed
-	@echo "Waiting for processing..."
-	@sleep 10
-	@echo "Checking health..."
-	@make health
-	@echo ""
-	@echo "Checking summary for dev-123..."
-	@curl -s http://localhost:8080/metrics/dev-123/summary | python3 -m json.tool
-	
+## help: exibe esta ajuda
+help:
+	@grep -E '^##' Makefile | sed 's/## //'
