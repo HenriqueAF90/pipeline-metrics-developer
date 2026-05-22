@@ -1,0 +1,59 @@
+services:
+  localstack:
+    image: localstack/localstack:2.3.2
+    container_name: localstack
+    ports:
+      - "4566:4566"
+
+    environment:
+      - SERVICES=sqs,dynamodb
+      - DEFAULT_REGION=us-east-1
+      - EDGE_PORT=4566
+
+    volumes:
+      - "./infra/localstack/init-aws.sh:/etc/localstack/init/ready.d/init-aws.sh"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  processor:
+    build: ./services/processor
+    container_name: processor
+
+    environment:
+      - AWS_ENDPOINT=http://localstack:4566
+      - AWS_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - QUEUE_RAW_EVENTS=raw-events
+      - QUEUE_PROCESSED_EVENTS=processed-events
+      - WORKER_COUNT=5
+      - PROCESSOR_ID=processor-instance-1
+
+    depends_on:
+      localstack:
+        condition: service_healthy
+
+  aggregator:
+  build: ./services/aggregator
+  container_name: aggregator
+  ports:
+    - "8080:8080"
+
+  environment:
+    - AWS_ENDPOINT=http://localstack:4566
+    - AWS_REGION=us-east-1
+    - AWS_ACCESS_KEY_ID=test
+    - AWS_SECRET_ACCESS_KEY=test
+    - QUEUE_PROCESSED_EVENTS=processed-events
+    - DYNAMO_TABLE_EVENTS=events
+    - DYNAMO_TABLE_SUMMARY=developer_summary
+    - API_PORT=8080
+
+  depends_on:
+    localstack:
+      condition: service_healthy
+      
