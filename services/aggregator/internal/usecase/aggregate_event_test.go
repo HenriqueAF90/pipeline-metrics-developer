@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -53,6 +54,30 @@ func (m *mockSummaryRepo) Save(_ context.Context, s domain.DeveloperSummary) err
 	}
 	m.summaries[s.DeveloperID] = s
 	return nil
+}
+
+type mockEventRepoWithSaveError struct {
+	mockEventRepo
+}
+
+func (m *mockEventRepoWithSaveError) Save(_ context.Context, event domain.ProcessedEvent) error {
+	return errors.New("event save failed")
+}
+
+type mockSummaryRepoWithGetError struct {
+	mockSummaryRepo
+}
+
+func (m *mockSummaryRepoWithGetError) Get(_ context.Context, devID string) (domain.DeveloperSummary, error) {
+	return domain.DeveloperSummary{DeveloperID: devID}, errors.New("summary get failed")
+}
+
+type mockSummaryRepoWithSaveError struct {
+	mockSummaryRepo
+}
+
+func (m *mockSummaryRepoWithSaveError) Save(_ context.Context, summary domain.DeveloperSummary) error {
+	return errors.New("summary save failed")
 }
 
 // --- helpers ---
@@ -140,5 +165,41 @@ func TestExecute_AccumulatesMultipleEvents(t *testing.T) {
 	}
 	if s.EventsProcessed != 3 {
 		t.Errorf("expected EventsProcessed=3, got %d", s.EventsProcessed)
+	}
+}
+
+func TestExecute_SummaryRepoGetError_ContinuesWithFreshSummary(t *testing.T) {
+	eventRepo := &mockEventRepo{existing: map[string]bool{}}
+	summaryRepo := &mockSummaryRepoWithGetError{}
+	uc := usecase.NewAggregateEventUseCase(eventRepo, summaryRepo, newLogger())
+
+	err := uc.Execute(context.Background(), makeBody("e4", "dev-1", "commits", 7))
+	if err != nil {
+		t.Fatalf("expected no error even when summary get fails, got: %v", err)
+	}
+	if len(eventRepo.saved) != 1 {
+		t.Fatalf("expected event saved, got %d", len(eventRepo.saved))
+	}
+}
+
+func TestExecute_SaveEventError_ReturnsError(t *testing.T) {
+	eventRepo := &mockEventRepoWithSaveError{}
+	summaryRepo := &mockSummaryRepo{}
+	uc := usecase.NewAggregateEventUseCase(eventRepo, summaryRepo, newLogger())
+
+	err := uc.Execute(context.Background(), makeBody("e5", "dev-1", "commits", 4))
+	if err == nil {
+		t.Fatal("expected error when event save fails")
+	}
+}
+
+func TestExecute_SaveSummaryError_ReturnsError(t *testing.T) {
+	eventRepo := &mockEventRepo{existing: map[string]bool{}}
+	summaryRepo := &mockSummaryRepoWithSaveError{}
+	uc := usecase.NewAggregateEventUseCase(eventRepo, summaryRepo, newLogger())
+
+	err := uc.Execute(context.Background(), makeBody("e6", "dev-1", "commits", 4))
+	if err == nil {
+		t.Fatal("expected error when summary save fails")
 	}
 }

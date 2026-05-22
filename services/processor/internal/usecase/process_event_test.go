@@ -90,6 +90,48 @@ func TestExecute_InvalidEvent_ReturnsErrInvalidEvent(t *testing.T) {
 	}
 }
 
+func TestExecute_InvalidMetricType_ReturnsErrInvalidEvent(t *testing.T) {
+	pub := &mockPublisher{}
+	uc := usecase.NewProcessEventUseCase(pub, "proc-1", newLogger())
+
+	body := `{"event_id":"550e8400-e29b-41d4-a716-446655440000","developer_id":"dev-1","metric_type":"invalid_type","value":5,"timestamp":"2026-04-15T10:00:00Z"}`
+	err := uc.Execute(context.Background(), 0, body)
+	if !usecase.IsInvalidEvent(err) {
+		t.Errorf("expected ErrInvalidEvent for invalid metric_type, got: %v", err)
+	}
+	if len(pub.published) != 0 {
+		t.Error("should not publish invalid event")
+	}
+}
+
+func TestExecute_NegativeValue_ReturnsErrInvalidEvent(t *testing.T) {
+	pub := &mockPublisher{}
+	uc := usecase.NewProcessEventUseCase(pub, "proc-1", newLogger())
+
+	body := `{"event_id":"550e8400-e29b-41d4-a716-446655440001","developer_id":"dev-1","metric_type":"commits","value":-1,"timestamp":"2026-04-15T10:00:00Z"}`
+	err := uc.Execute(context.Background(), 0, body)
+	if !usecase.IsInvalidEvent(err) {
+		t.Errorf("expected ErrInvalidEvent for negative value, got: %v", err)
+	}
+	if len(pub.published) != 0 {
+		t.Error("should not publish invalid event")
+	}
+}
+
+func TestExecute_FutureTimestamp_ReturnsErrInvalidEvent(t *testing.T) {
+	pub := &mockPublisher{}
+	uc := usecase.NewProcessEventUseCase(pub, "proc-1", newLogger())
+
+	body := `{"event_id":"550e8400-e29b-41d4-a716-446655440002","developer_id":"dev-1","metric_type":"commits","value":5,"timestamp":"2099-01-01T00:00:00Z"}`
+	err := uc.Execute(context.Background(), 0, body)
+	if !usecase.IsInvalidEvent(err) {
+		t.Errorf("expected ErrInvalidEvent for future timestamp, got: %v", err)
+	}
+	if len(pub.published) != 0 {
+		t.Error("should not publish invalid event")
+	}
+}
+
 func TestExecute_PublisherError_ReturnsTransientError(t *testing.T) {
 	pub := &mockPublisher{err: errors.New("connection refused")}
 	uc := usecase.NewProcessEventUseCase(pub, "proc-1", newLogger())

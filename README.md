@@ -80,6 +80,56 @@ Resposta esperada:
 
 ---
 
+## Consultar filas e DLQ
+
+Com LocalStack, use o AWS CLI apontando para o endpoint local do LocalStack.
+
+### Listar filas
+
+```bash
+aws --endpoint-url=http://localhost:4566 sqs list-queues --region us-east-1
+```
+
+### Receber mensagens da fila principal
+
+```bash
+aws --endpoint-url=http://localhost:4566 sqs receive-message \
+  --queue-url http://localhost:4566/000000000000/raw-events \
+  --max-number-of-messages 10 \
+  --wait-time-seconds 2 \
+  --region us-east-1
+```
+
+```bash
+aws --endpoint-url=http://localhost:4566 sqs receive-message \
+  --queue-url http://localhost:4566/000000000000/processed-events \
+  --max-number-of-messages 10 \
+  --wait-time-seconds 2 \
+  --region us-east-1
+```
+
+### Receber mensagens da DLQ
+
+```bash
+aws --endpoint-url=http://localhost:4566 sqs receive-message \
+  --queue-url http://localhost:4566/000000000000/raw-events-dlq \
+  --max-number-of-messages 10 \
+  --wait-time-seconds 2 \
+  --region us-east-1
+```
+
+```bash
+aws --endpoint-url=http://localhost:4566 sqs receive-message \
+  --queue-url http://localhost:4566/000000000000/processed-events-dlq \
+  --max-number-of-messages 10 \
+  --wait-time-seconds 2 \
+  --region us-east-1
+```
+
+> Observação: o `receive-message` não exclui automaticamente a mensagem. Se você quiser mantê-la para retry, não use `delete-message`.
+
+---
+
 ## Ambientes
 
 ### Desenvolvimento
