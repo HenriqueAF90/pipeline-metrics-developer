@@ -1,6 +1,6 @@
 # Pipeline Metrics Developer
 
-Pipeline de métricas de produtividade de desenvolvedores construído com dois serviços Go que se comunicam exclusivamente via filas SQS (LocalStack).
+Pipeline de métricas de produtividade de desenvolvedores com dois serviços Go que se comunicam exclusivamente via filas SQS (LocalStack).
 
 ```
 [SQS: raw-events] → [Processor] → [SQS: processed-events] → [Aggregator] → [DynamoDB]
@@ -12,20 +12,15 @@ Pipeline de métricas de produtividade de desenvolvedores construído com dois s
 
 ## Requisitos
 
-- Docker e Docker Compose (v2)
-- `make` (opcional, mas recomendado)
-- `jq` (opcional, para formatar respostas da API)
+- Docker
+- Docker Compose (v2)
 
 ---
 
 ## Como rodar
 
 ```bash
-# Sobe tudo com um único comando
 docker compose up --build
-
-# Ou com make:
-make up
 ```
 
 Após subir, aguarde os serviços conectarem às filas. O Aggregator expõe a API em `http://localhost:8080`.
@@ -39,15 +34,13 @@ Após subir, aguarde os serviços conectarem às filas. O Aggregator expõe a AP
 Publique mensagens de teste na fila (inclui válidas, inválidas e duplicadas):
 
 ```bash
-make seed
-# ou diretamente:
 bash scripts/seed.sh
 ```
 
 ### 2. Verificar health check
 
 ```bash
-curl http://localhost:8080/health | jq .
+curl http://localhost:8080/health
 ```
 
 Resposta esperada:
@@ -64,13 +57,13 @@ Resposta esperada:
 ### 3. Consultar eventos de um desenvolvedor
 
 ```bash
-curl http://localhost:8080/metrics/dev-1 | jq .
+curl http://localhost:8080/metrics/dev-1
 ```
 
 ### 4. Consultar resumo agregado de um desenvolvedor
 
 ```bash
-curl http://localhost:8080/metrics/dev-1/summary | jq .
+curl http://localhost:8080/metrics/dev-1/summary
 ```
 
 Resposta esperada:
@@ -87,34 +80,46 @@ Resposta esperada:
 
 ---
 
-## Testes unitários
+## Ambientes
+
+### Desenvolvimento
+
+Use o ambiente local com LocalStack e Docker Compose:
 
 ```bash
-make test
-
-# Apenas processor:
-cd services/processor && go test ./... -v
-
-# Apenas aggregator:
-cd services/aggregator && go test ./... -v
+docker compose up --build
 ```
+
+- LocalStack cria SQS e DynamoDB locais.
+- O serviço `processor` consome mensagens de `raw-events` e publica em `processed-events`.
+- O serviço `aggregator` lê de `processed-events`, persiste em DynamoDB e expõe a API REST.
+- A API fica disponível em `http://localhost:8080`.
+
+### Produção
+
+Para produção, use recursos AWS reais em vez de LocalStack.
+
+- Construa as imagens dos serviços com os `Dockerfile` em `services/processor` e `services/aggregator`.
+- Configure os endpoints AWS corretos em variáveis de ambiente.
+- Exemplo de variáveis de produção:
+  - `AWS_REGION=us-east-1`
+  - `SQS_ENDPOINT=https://sqs.us-east-1.amazonaws.com`
+  - `DYNAMODB_ENDPOINT=https://dynamodb.us-east-1.amazonaws.com`
+  - `RAW_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/000000000000/raw-events`
+  - `PROCESSED_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/000000000000/processed-events`
+  - `EVENTS_TABLE=events`
+  - `SUMMARY_TABLE=developer_summary`
+
+> Observação: a configuração `docker-compose.yml` atual é destinada ao ambiente local com LocalStack. Em produção, você deve implantar os containers em um orquestrador ou serviço de containers com as variáveis de ambiente adequadas.
 
 ---
 
-## Comandos Make disponíveis
+## Testes unitários
 
-| Comando | Descrição |
-|---------|-----------|
-| `make up` | Sobe todos os containers |
-| `make down` | Derruba todos os containers |
-| `make build` | Compila imagens sem subir |
-| `make test` | Executa todos os testes unitários |
-| `make seed` | Publica mensagens de teste |
-| `make logs` | Logs de todos os serviços |
-| `make logs-processor` | Logs apenas do Processor |
-| `make logs-aggregator` | Logs apenas do Aggregator |
-| `make health` | Checa o endpoint /health |
-| `make clean` | Remove containers, volumes e imagens |
+```bash
+cd services/processor && go test ./... -v
+cd services/aggregator && go test ./... -v
+```
 
 ---
 
@@ -161,7 +166,6 @@ Base URL: `http://localhost:8080`
 ├── infra/localstack/init-aws.sh          # Cria filas e tabelas no startup
 ├── scripts/seed.sh                       # Publica mensagens de teste
 ├── docker-compose.yml
-├── Makefile
 └── README.md
 ```
 
